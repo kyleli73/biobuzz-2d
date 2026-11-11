@@ -263,6 +263,72 @@ test('a FLOWER holds 8 POLLEN or 5 NECTAR, and its bottom POLLEN is below the sc
   assert.strictEqual(scored([{ kind: 'nectar' }]), 1);
 });
 
+function pollenBall(id) {
+  return { id, kind: 'pollen', color: 'yellow', r: POLLEN_RADIUS, x: 0, y: 0, vx: 0, vy: 0, air: null };
+}
+
+test('a HIVE tips again and again: after the tip settles, the new up CELL takes shots and tips too', () => {
+  const world = setupWorld({ R1: 'pollen', R2: 'pollen', B1: 'pollen', B2: 'nectar' });
+  runUntilPhase(world, 'auto');
+  const shooter = robotOf(world, 'B1');
+  shooter.x = -1.45;
+  shooter.y = -0.25;
+  shooter.heading = 0;
+  runUntil(world, w => w.banked.blue.hive >= 20, { B1: { drive: 0, turn: 0, fire: true } }, 600);
+  assert.strictEqual(world.hives.blue.up, 1);
+
+  runFor(world, 1, {});
+  assert.strictEqual(world.hives.blue.tipT, 0, 'the tip has finished');
+
+  // 7 POLLEN already in the +x CELL, so the next one tips it (8 POLLEN, Field Setup Guide 12.3).
+  for (let i = 0; i < 7; i++) world.hives.blue.cells[1].push(pollenBall(9200 + i));
+  shooter.x = 1.45;
+  shooter.y = -0.25;
+  shooter.heading = Math.PI;
+  runUntil(world, w => w.banked.blue.hive >= 40, { B1: { drive: 0, turn: 0, fire: true } }, 300);
+  assert.strictEqual(world.hives.blue.tips, 2);
+  assert.strictEqual(world.banked.blue.hive, 40);
+  assert.strictEqual(world.hives.blue.up, 0, 'back to the first CELL');
+});
+
+test('shots auto-aim, but only from past the end of the HIVE: a robot beside it cannot fire', () => {
+  const world = setupWorld({ R1: 'pollen', R2: 'pollen', B1: 'pollen', B2: 'nectar' });
+  runUntilPhase(world, 'auto');
+  const bot = robotOf(world, 'B1');
+  bot.x = -0.3;
+  bot.y = -1.2;
+  bot.heading = Math.PI / 2;
+  runFor(world, 0.5, { B1: { drive: 0, turn: 0, fire: true } });
+  assert.strictEqual(bot.held.length, 4, 'nothing was launched');
+  assert.ok(world.events.some(e => e.text === 'Get past the end of your HIVE to shoot'));
+
+  // Facing away from the HIVE does not matter: the turret aims for the robot.
+  bot.x = -1.2;
+  bot.y = -1.2;
+  bot.heading = Math.PI;
+  runFor(world, 0.2, { B1: { drive: 0, turn: 0, fire: true } });
+  assert.ok(bot.held.length < 4, 'past the end of the HIVE it fires');
+  runFor(world, 1, {});
+  assert.ok(world.hives.blue.cells[0].some(b => b.kind === 'pollen'), 'and the shot lands in the blue -x CELL');
+});
+
+test('a shot at a CELL that is down misses and stays on the field', () => {
+  const world = setupWorld({ R1: 'pollen', R2: 'pollen', B1: 'pollen', B2: 'nectar' });
+  runUntilPhase(world, 'auto');
+  assert.strictEqual(world.hives.red.up, 1, 'red starts with its +x CELL up');
+  const bot = robotOf(world, 'R1');
+  bot.x = -1.45;
+  bot.y = 0.25;
+  bot.heading = 0;
+  runFor(world, 0.2, { R1: { drive: 0, turn: 0, fire: true } });
+  runFor(world, 1.5, {});
+  assert.strictEqual(world.hives.red.cells[0].length, 0, 'nothing went into the -x CELL');
+  assert.strictEqual(world.hives.red.cells[1].length, 3, 'the up CELL still has only its 3 NECTAR');
+  assert.strictEqual(world.hives.red.tips, 0);
+  const onFloor = world.balls.filter(b => b.kind === 'pollen' && b.air === null && Math.abs(b.y - 0.25) < 0.6 && b.x < -0.6 && b.x > -1.3);
+  assert.ok(onFloor.length >= 1, 'the missed POLLEN rolled off the frame onto the tiles');
+});
+
 for (const { name, fn } of tests) {
   try {
     fn();

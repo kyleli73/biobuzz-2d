@@ -244,7 +244,7 @@ function createWorld(setup) {
   }
 
   for (const entry of setup.robots) world.robots.push(makeRobot(world, entry));
-  for (const robot of world.robots) updateHint(robot);
+  for (const robot of world.robots) updateHint(world, robot);
   return world;
 }
 
@@ -311,6 +311,10 @@ function stepWorld(world, dt, inputs) {
 
 function stepSubstep(world, h, inputs) {
   advanceClock(world, h);
+  for (const alliance of WORLD_ALLIANCES) {
+    const hive = world.hives[alliance];
+    hive.tipT = Math.max(0, hive.tipT - h);
+  }
   if (lastMinuteStarted(world)) startLastMinuteRelease(world);
 
   /* Robots only take input in phases that allow driving. Physics still runs in every phase,
@@ -328,6 +332,7 @@ function stepSubstep(world, h, inputs) {
 
   world.robots.forEach((robot, i) => {
     robot.atFlower = findFlowerAt(world, robot);
+    robot.aim = aimFor(robot);
     pushFloorBallsFromRobot(world, robot);
     collectBalls(world, robot);
     if (drives) applyRobotActions(world, robot, commands[i]);
@@ -336,7 +341,7 @@ function stepSubstep(world, h, inputs) {
   stepFloorBalls(world, h);
   stepAirborneBalls(world, h);
   stepNectarRelease(world, h);
-  for (const robot of world.robots) updateHint(robot);
+  for (const robot of world.robots) updateHint(world, robot);
 }
 
 function commandFor(robot, inputs, drives) {
@@ -564,35 +569,67 @@ function pullFromFlower(world, robot) {
   robot.pullCooldown = FLOWER.pullCooldown;
 }
 
+/* Auto-aim, the way dsim does it: every robot has a turret that always points at the nearer
+   CELL of its own HIVE, the one at the same end of the field (end 0 at -x, end 1 at +x). A
+   CELL's mouth faces out along x, so a ball only goes in travelling inward. That means you can
+   only shoot a CELL from its own end of the field, past the end of the HIVE frame.
+   The aim does not care whether that CELL is up. A shot at a CELL that is down still goes, and
+   misses, so players have to watch which end of their HIVE is live. */
+function aimFor(robot) {
+  const end = robot.x < 0 ? 0 : 1;
+  const c = cellCentre(robot.alliance, end);
+  const dx = c.x - robot.x;
+  const dy = c.y - robot.y;
+  const dist = Math.hypot(dx, dy);
+  const outside = end === 0 ? robot.x <= -HIVE.halfW : robot.x >= HIVE.halfW;
+  return { end, x: c.x, y: c.y, angle: Math.atan2(dy, dx), dist, outside, ok: outside && dist <= BALL.maxShot };
+}
+
 function launchHeld(world, robot) {
+  if (robot.held.length === 0) return;
+  const aim = robot.aim || aimFor(robot);
+  if (!aim.outside) {
+    refuse(world, robot, 'Get past the end of your HIVE to shoot');
+    return;
+  }
+  if (!aim.ok) {
+    refuse(world, robot, 'Too far: get closer to your HIVE');
+    return;
+  }
   const ball = robot.held.shift();
-  if (!ball) return;
-  const front = robotFrontPoint(robot);
-  ball.x = front.x;
-  ball.y = front.y;
+  const dx = Math.cos(aim.angle);
+  const dy = Math.sin(aim.angle);
+  ball.x = robot.x + dx * BALL.muzzle;
+  ball.y = robot.y + dy * BALL.muzzle;
   ball.vx = 0;
   ball.vy = 0;
   ball.air = {
-    dx: Math.cos(robot.heading),
-    dy: Math.sin(robot.heading),
+    dx,
+    dy,
     flown: 0,
-    range: BALL.shotRange,
-    owner: robot.slot
+    range: Math.max(0, aim.dist - BALL.muzzle),
+    owner: robot.slot,
+    target: { alliance: robot.alliance, end: aim.end }
   };
   world.balls.push(ball);
-  pushFx(world, 'shot', front.x, front.y, { slot: robot.slot, alliance: robot.alliance, dx: ball.air.dx, dy: ball.air.dy });
+  pushFx(world, 'shot', ball.x, ball.y, { slot: robot.slot, alliance: robot.alliance, dx, dy });
 }
 
 /* The hint is the short line the HUD shows under each robot. It tells the player what the
    next press will do. */
-function updateHint(robot) {
+function updateHint(world, robot) {
   const count = robot.held.length;
+  const aim = robot.aim;
   if (robot.atFlower >= 0 && count > 0) {
     robot.hint = 'At FLOWER: fire to drop in';
-  } else if (count >= ROBOT.maxHeld) {
-    robot.hint = `Full (${count}/${ROBOT.maxHeld})`;
+  } else if (count > 0 && aim && !aim.outside) {
+    robot.hint = 'Get past the end of your HIVE to shoot';
+  } else if (count > 0 && aim && !aim.ok) {
+    robot.hint = 'Too far: get closer to your HIVE';
+  } else if (count > 0 && aim && world.hives[robot.alliance].up !== aim.end) {
+    robot.hint = 'This CELL is down: shots will miss';
   } else if (count > 0) {
-    robot.hint = 'Aim at your HIVE';
+    robot.hint = count >= ROBOT.maxHeld ? `Full (${count}/${ROBOT.maxHeld}): fire, auto-aimed` : 'Fire: auto-aimed at your CELL';
   } else {
     robot.hint = 'Empty: drive over balls';
   }
@@ -671,9 +708,9 @@ function stepAirborneBalls(world, h) {
   }
 }
 
-/* An airborne ball ignores robots, balls and the HIVE frame. It can only drop into a CELL
-   after it has flown far enough, so a ball released right in front of a HIVE does not
-   count. */
+/* An airborne ball ignores robots, balls and the HIVE frame. A shot comes down where it was
+   aimed. It drops into its target CELL if that CELL is up, and otherwise lands on the frame
+   and rolls off: a miss. Only the CELL it was aimed at can take it. */
 function stepAirborne(world, ball, h) {
   const air = ball.air;
   const travel = (air.speed || BALL.shotSpeed) * h;
@@ -681,25 +718,14 @@ function stepAirborne(world, ball, h) {
   ball.y += air.dy * travel;
   air.flown += travel;
 
-  if (!air.spill && air.flown >= BALL.shotArmDist) {
-    const alliance = cellUnderBall(world, ball);
-    if (alliance) {
-      arriveAtCell(world, ball, alliance);
-      return;
-    }
+  if (air.flown >= air.range && air.target && world.hives[air.target.alliance].up === air.target.end) {
+    arriveAtCell(world, ball, air.target.alliance);
+    return;
   }
   if (air.flown >= air.range || leavesField(ball)) {
     landBall(ball, 1);
     pushFx(world, 'land', ball.x, ball.y, { r: ball.r });
   }
-}
-
-function cellUnderBall(world, ball) {
-  for (const alliance of WORLD_ALLIANCES) {
-    const rect = cellRect(alliance, world.hives[alliance].up);
-    if (pointInRect(ball.x, ball.y, rect)) return alliance;
-  }
-  return null;
 }
 
 function arriveAtCell(world, ball, alliance) {

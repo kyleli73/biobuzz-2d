@@ -406,28 +406,35 @@ function drawBalls(ctx, L, world) {
   ctx.restore();
 }
 
-/* The aim line runs from the robot's intake forward, BALL.shotRange metres, and ends in a
-   ring. That is where a shot lands, so it helps players aim. */
-function drawAim(ctx, L, robot) {
-  const dx = Math.cos(robot.heading);
-  const dy = Math.sin(robot.heading);
-  const fx = robot.x + dx * ROBOT.half;
-  const fy = robot.y + dy * ROBOT.half;
-  const ex = fx + dx * BALL.shotRange;
-  const ey = fy + dy * BALL.shotRange;
+/* The aim line runs from the turret to the CELL it is locked on, only while the robot holds
+   something and the shot is allowed (past the end of the HIVE, in range). It is solid in the
+   alliance colour when that CELL is up, and grey when the CELL is down and the shot would
+   miss. */
+function drawAim(ctx, L, robot, world) {
+  const aim = robot.aim;
+  if (!aim || !aim.ok || robot.held.length === 0) return;
+  const live = world.hives[robot.alliance].up === aim.end;
+  const sx = robot.x + Math.cos(aim.angle) * BALL.muzzle;
+  const sy = robot.y + Math.sin(aim.angle) * BALL.muzzle;
   ctx.save();
   setFieldTransform(ctx, L);
-  ctx.globalAlpha = 0.55;
-  ctx.strokeStyle = COLORS[robot.alliance];
-  ctx.lineWidth = pxToM(L, 1.5);
-  ctx.setLineDash([pxToM(L, 4), pxToM(L, 5)]);
+  ctx.globalAlpha = live ? 0.8 : 0.45;
+  ctx.strokeStyle = live ? COLORS[robot.alliance] : COLORS.muted;
+  ctx.lineWidth = pxToM(L, 2);
+  ctx.setLineDash([pxToM(L, 5), pxToM(L, 5)]);
   ctx.beginPath();
-  ctx.moveTo(fx, fy);
-  ctx.lineTo(ex, ey);
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(aim.x, aim.y);
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.beginPath();
-  ctx.arc(ex, ey, 0.045, 0, TAU);
+  ctx.arc(aim.x, aim.y, 0.06, 0, TAU);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(aim.x - 0.09, aim.y);
+  ctx.lineTo(aim.x + 0.09, aim.y);
+  ctx.moveTo(aim.x, aim.y - 0.09);
+  ctx.lineTo(aim.x, aim.y + 0.09);
   ctx.stroke();
   ctx.restore();
 }
@@ -442,7 +449,7 @@ function drawRobot(ctx, L, robot, world) {
   const kick = recoilOf(world, robot);
   ctx.save();
   setFieldTransform(ctx, L);
-  ctx.translate(robot.x - Math.cos(robot.heading) * kick, robot.y - Math.sin(robot.heading) * kick);
+  ctx.translate(robot.x - kick.x, robot.y - kick.y);
   ctx.rotate(robot.heading);
   roundRectPath(ctx, -half, -half, size, size, 0.04);
   ctx.fillStyle = COLORS[robot.alliance];
@@ -459,6 +466,23 @@ function drawRobot(ctx, L, robot, world) {
     drawBall(ctx, L, b.kind, b.color, -0.13, ly, b.kind === 'pollen' ? 0.024 : 0.03);
   });
   ctx.restore();
+
+  // The turret turns on its own, pointing wherever the auto-aim is locked.
+  if (robot.aim) {
+    ctx.save();
+    setFieldTransform(ctx, L);
+    ctx.translate(robot.x - kick.x, robot.y - kick.y);
+    ctx.rotate(robot.aim.angle);
+    ctx.fillStyle = '#12151a';
+    ctx.fillRect(0, -0.022, BALL.muzzle, 0.044);
+    ctx.beginPath();
+    ctx.arc(0, 0, 0.065, 0, TAU);
+    ctx.fill();
+    ctx.lineWidth = pxToM(L, 2);
+    ctx.strokeStyle = robot.aim.ok && robot.held.length > 0 ? COLORS.ink : COLORS[robot.alliance + 'Dark'];
+    ctx.stroke();
+    ctx.restore();
+  }
 
   const c = fieldToScreen(L, robot.x, robot.y);
   drawText(ctx, L, robot.slot, c.x, c.y, { size: Math.round(ROBOT.size * L.s * 0.26), color: COLORS.ink, shadow: true });
@@ -480,14 +504,20 @@ function drawRobot(ctx, L, robot, world) {
   drawText(ctx, L, ARCHETYPES[robot.archetype].letter, bc.x, bc.y, { size: 11 });
 }
 
-/* How far back a robot is pushed by its latest shot: RECOIL_M straight after firing, easing
-   to 0 over RECOIL_SECS. */
+/* How far a robot is pushed back by its latest shot, along the shot's line: RECOIL_M straight
+   after firing, easing to 0 over RECOIL_SECS. Returned as an {x, y} offset. */
 function recoilOf(world, robot) {
-  let kick = 0;
+  let kick = { x: 0, y: 0 };
+  let best = 0;
   for (const f of world.fx) {
     if (f.kind !== 'shot' || f.slot !== robot.slot) continue;
     const t = (world.time - f.t) / RECOIL_SECS;
-    if (t >= 0 && t < 1) kick = Math.max(kick, RECOIL_M * (1 - t) * (1 - t));
+    if (!(t >= 0 && t < 1)) continue;
+    const m = RECOIL_M * (1 - t) * (1 - t);
+    if (m > best) {
+      best = m;
+      kick = { x: f.dx * m, y: f.dy * m };
+    }
   }
   return kick;
 }
@@ -620,7 +650,7 @@ function drawWorld(ctx, world, view) {
   drawHive(ctx, L, world);
   drawFlowers(ctx, L, world);
   drawBalls(ctx, L, world);
-  world.robots.forEach(robot => drawAim(ctx, L, robot));
+  world.robots.forEach(robot => drawAim(ctx, L, robot, world));
   world.robots.forEach(robot => drawRobot(ctx, L, robot, world));
   drawFx(ctx, L, world);
   drawToasts(ctx, L, world);

@@ -62,8 +62,8 @@ const BALL = {
   rollFriction: 1.6,     // m/s^2 of slowdown while rolling
   wallBounce: 0.45,
   shotSpeed: 4.0,        // m/s while airborne
-  shotRange: 1.8,        // an airborne ball lands this far from where it left the robot
-  shotArmDist: 0.5,      // and can only drop into a CELL after flying at least this far
+  maxShot: 2.2,          // the turret reaches a CELL centre at most this far away
+  muzzle: 0.15,          // a shot leaves the turret this far out from the robot's centre
   landRoll: 0.6          // m/s it keeps rolling after it lands
 };
 
@@ -225,11 +225,12 @@ const COLORS = {
      time, phase (a PHASES id), phaseIndex, phaseTime (seconds into the phase), nextId,
      teleopLeft (seconds left in TELEOP, 120 until TELEOP starts),
      robots: [{ slot, alliance, archetype, x, y, heading, v (forward m/s), omega,
+                aim: { end, x, y, angle, dist, outside, ok } (see aimFor in world.js),
                 held: [ball], fireCooldown, pullCooldown, sinceDrop, atFlower (index|-1),
                 left (true once off the wall in AUTO), hint (short text for the HUD),
                 refuseCooldown }],
      balls:  [{ id, kind: 'pollen'|'nectar', color: 'yellow'|'red'|'blue', r, x, y, vx, vy,
-                air: null | { dx, dy, flown, range, owner, spill?, speed? } }]  floor and airborne
+                air: null | { dx, dy, flown, range, owner, target?, spill?, speed? } }]
      hives:  { red: { up: 0|1, cells: [[ball], [ball]], tipT, tips },  blue: same }
      flowers: [{ ...FLOWERS[i], stack: [ball] }]                    bottom first
      reserve: { red, blue }, released: { red: bool, blue: bool }     NECTAR still off field
