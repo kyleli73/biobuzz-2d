@@ -178,7 +178,7 @@ test('G410: a NECTAR robot at a FLOWER cannot drop NECTAR until the last minute,
   assert.strictEqual(flower.stack[4].color, 'blue');
 
   const score = scoreOf(world);
-  assert.strictEqual(score.blue.flower, 15, 'bottom NECTAR 5 plus 2 per element, 5 elements');
+  assert.strictEqual(score.blue.flower, 13, 'bottom NECTAR 5, plus 2 for each of the 4 elements above the middle ring');
   assert.strictEqual(score.red.flower, 0);
 });
 
@@ -224,6 +224,20 @@ test('a POLLEN dropped in the red GARDEN adds 1 to the red GARDEN score, whateve
 
 let passed = 0;
 const failures = [];
+test('a FLOWER holds 8 POLLEN or 5 NECTAR, and its bottom POLLEN is below the scoring volume', () => {
+  const fill = kind => {
+    const stack = [];
+    while (vm.runInContext('flowerHasRoom', ctx)(stack)) stack.push({ kind });
+    return stack.length;
+  };
+  assert.strictEqual(fill('pollen'), 8);
+  assert.strictEqual(fill('nectar'), 5);
+  const scored = vm.runInContext('flowerScoredCount', ctx);
+  assert.strictEqual(scored([{ kind: 'pollen' }]), 0, 'a lone POLLEN on the lower ring scores nothing');
+  assert.strictEqual(scored([{ kind: 'pollen' }, { kind: 'pollen' }, { kind: 'pollen' }, { kind: 'pollen' }]), 3);
+  assert.strictEqual(scored([{ kind: 'nectar' }]), 1);
+});
+
 for (const { name, fn } of tests) {
   try {
     fn();

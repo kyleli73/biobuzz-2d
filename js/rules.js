@@ -78,8 +78,11 @@ const HIVE = {
   halfW: 0.628,          // frame half-width along x
   halfD: 0.495,          // frame half-depth along y
   cellInner: 0.27,       // a CELL spans |x| from here to halfW
-  /* How full a CELL must be before it tips. The manual does not say; this is the existing
-     Bubblotics 3D sim's fit to the known tipping combinations (8 POLLEN, 5 NECTAR, or 3 + 3). */
+  /* How full a CELL must be before it tips. The manual does not say, but the Event Field Setup
+     Guide (V1.0, section 12.3) does: every CELL is ballasted to tip at 8 POLLEN alone, or at 3
+     NECTAR + 3 POLLEN, and NOT at 7 POLLEN or 3 NECTAR + 2 POLLEN. These weights hit all four
+     of those cases exactly. Mixes the guide does not list (1 NECTAR + 6 POLLEN, say) are our fit,
+     and a real HIVE may tip a little earlier or later on them. */
   tipLoad: 15, pollenLoad: 2, nectarLoad: 3,
   tipTime: 0.6,          // seconds the tip animation takes; shots arriving then bounce off
   startUp: { blue: 0, red: 1 },
@@ -104,12 +107,44 @@ const FLOWERS = [
 ];
 const FLOWER = {
   r: 0.075,              // drawn and collision radius
-  capacity: 8,           // [GUESS] from the tube size; the manual does not give one
   startPollen: 4,        // 10.3.1 A.i
   reach: 0.16,           // a robot's front must be this close to the centre to use it
   pullCooldown: 0.5,     // seconds between pulling POLLEN out of the bottom
-  pullAfterDrop: 1.5     // no pulling for this long after dropping something in
+  pullAfterDrop: 1.5,    // no pulling for this long after dropping something in
+  /* Heights inside the tube, in inches above the tiles, from section 9.7. POLLEN rests on the
+     lower ring (0.4 in tall). NECTAR is too wide for the middle ring's hole, so it sits on the
+     middle ring, which is the top of the 3.55 in Retrieval Opening. The manual does not print the
+     middle ring's height; 0.4 + 3.55 is our reading of Figure 9-12. */
+  floorIn: 0.4,
+  middleRingIn: 0.4 + 3.55,
+  topRingIn: 21.5,
+  sizeIn: { pollen: 2.8, nectar: 3.6 }
 };
+
+/* Where each element in a FLOWER sits: [bottom, top] in inches, for a stack listed bottom first.
+   Each one rests on the one below it, and a NECTAR never goes lower than the middle ring. */
+function flowerHeights(stack) {
+  let z = FLOWER.floorIn;
+  return stack.map(ball => {
+    const bottom = ball.kind === 'nectar' ? Math.max(z, FLOWER.middleRingIn) : z;
+    z = bottom + FLOWER.sizeIn[ball.kind];
+    return [bottom, z];
+  });
+}
+
+/* Another element fits while the column has not reached the top ring yet. That gives 8 POLLEN,
+   or 5 NECTAR, with mixes in between. */
+function flowerHasRoom(stack) {
+  const h = flowerHeights(stack);
+  return h.length === 0 || h[h.length - 1][1] < FLOWER.topRingIn;
+}
+
+/* 10.5.2: an element scores if any part of it is between the middle ring and the top ring.
+   So the bottom POLLEN, sitting on the lower ring, is below the scoring volume and earns
+   nothing. Every NECTAR counts, since it can never sit lower than the middle ring. */
+function flowerScoredCount(stack) {
+  return flowerHeights(stack).filter(([, top]) => top > FLOWER.middleRingIn).length;
+}
 
 /* Taped zones, 9.3. Rectangles in field coordinates. GARDENS are in opposite corners. */
 const ZONES = {

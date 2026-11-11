@@ -355,7 +355,7 @@ function drawFlowers(ctx, L, world) {
     ctx.restore();
 
     const c = fieldToScreen(L, f.x, f.y);
-    drawText(ctx, L, `${f.stack.length}/${FLOWER.capacity}`, c.x, c.y, { size: 10 });
+    drawText(ctx, L, flowerHasRoom(f.stack) ? `${f.stack.length}` : 'FULL', c.x, c.y, { size: 10 });
 
     if (!lastMinute) {
       // NECTAR is locked until the last minute (G410). The lock sits beside the flower, along the wall.

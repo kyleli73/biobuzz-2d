@@ -525,7 +525,7 @@ function dropOnFlower(world, robot) {
   const ball = robot.held[0];
   if (!ball) return;
   const flower = world.flowers[robot.atFlower];
-  if (flower.stack.length >= FLOWER.capacity) {
+  if (!flowerHasRoom(flower.stack)) {
     refuse(world, robot, 'That FLOWER is full');
     return;
   }
@@ -870,7 +870,7 @@ function addFlowerPoints(world, score) {
     const bottom = nectar[0];
     const top = nectar[nectar.length - 1];
     score[bottom.color].flower += POINTS.bottomNectar;
-    score[top.color].flower += POINTS.flowerElement * flower.stack.length;
+    score[top.color].flower += POINTS.flowerElement * flowerScoredCount(flower.stack);
   }
 }
 

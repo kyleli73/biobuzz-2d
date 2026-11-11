@@ -24,4 +24,4 @@ Gamepads also work (left stick drives, right stick turns, A or RT fires); pad 1 
 | `js/main.js` | Setup screen, scoreboard, results, the game loop |
 | `test/world.test.js` | Rule tests: run `node test/world.test.js` |
 
-Two numbers are not in the manual and are marked as guesses in `rules.js`: how full a CELL must be to tip (15 load units, POLLEN 2, NECTAR 3, the same fit as the 3D sim) and FLOWER capacity (8).
+The HIVE tips the way FIRST calibrates real ones (Event Field Setup Guide section 12.3): at 8 POLLEN alone, or 3 NECTAR + 3 POLLEN. Other mixes are our fit. A FLOWER fills by height (section 9.7), which gives 8 POLLEN or 5 NECTAR, and its bottom POLLEN sits below the scoring volume, so it earns nothing. The middle ring height that both depend on is our reading of Figure 9-12, since the manual does not print it.
