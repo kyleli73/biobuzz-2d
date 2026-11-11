@@ -142,7 +142,8 @@ test('a POLLEN robot in front of its alliance CELL tips the HIVE after 3 POLLEN,
 
   assert.strictEqual(world.banked.blue.hive, 20);
   assert.strictEqual(world.hives.blue.up, 1, 'the CELL that was up is now the other end');
-  assert.strictEqual(shooter.held.length, 1, 'exactly three POLLEN were fired before the tip');
+  const stillOut = shooter.held.length + world.balls.filter(b => b.air && b.air.owner === 'B1').length;
+  assert.strictEqual(stillOut, 1, 'three POLLEN went in to tip it; with rapid fire the 4th is already in the air');
   assert.strictEqual(world.reserve.blue, 4);
   const dropped = world.balls.filter(b => b.kind === 'nectar' && b.color === 'blue' && ballInRect(b, ZONES.loading.blue));
   assert.strictEqual(dropped.length, 1);
@@ -297,6 +298,8 @@ test('a HIVE tips again and again: after the tip settles, the new up CELL takes 
 
   // 7 POLLEN already in the +x CELL, so the next one tips it (8 POLLEN, Field Setup Guide 12.3).
   for (let i = 0; i < 7; i++) world.hives.blue.cells[1].push(pollenBall(9200 + i));
+  shooter.held.length = 0;
+  shooter.held.push(pollenBall(9300));
   shooter.x = 1.45;
   shooter.y = -0.25;
   shooter.heading = Math.PI;

@@ -4,7 +4,7 @@ Play it: https://kyleli73.github.io/biobuzz-2d/
 
 A top-down, 4-players-on-1-keyboard version of BIOBUZZ. Open `index.html` in a browser. No build step.
 
-Every robot has the same drivetrain (500 RPM, 104 mm wheels, 18 in square). Players pick one of three mechanisms: **Pollen Bot** (POLLEN only), **Nectar Bot** (own NECTAR only) or **Hybrid Bot** (both, but shoots at half speed).
+Every robot has the same drivetrain (500 RPM, 104 mm wheels, 18 in square). Players pick one of three mechanisms: **Pollen Bot** (POLLEN only), **Nectar Bot** (own NECTAR only) or **Hybrid Bot** (both). Every robot has the same rapid-fire shooter: hold fire and it empties in about a third of a second.
 
 | Seat | Drive | Fire |
 |---|---|---|

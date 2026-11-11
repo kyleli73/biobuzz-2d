@@ -27,27 +27,27 @@ const ROBOT = {
   maxTurn: 3.6,          // rad/s
   turnAccel: 18,         // rad/s^2
   maxHeld: 4,            // G407: no more than 4 elements at a time
+  fireInterval: 0.08,    // rapid fire: holding the key empties a full robot in about a third of a second
   collideR: 0.25         // robot-to-robot contact radius
 };
 
-/* The three robot types. Same drivetrain, different mechanism. The hybrid handles both
-   elements, and pays for it with a slower shooter, otherwise it would beat the others at
-   everything and nobody would pick them. */
+/* The three robot types. Same drivetrain and the same rapid-fire shooter, different intake.
+   The only difference is which elements each one can pick up. */
 const ARCHETYPES = {
   pollen: {
     name: 'Pollen Bot', letter: 'P',
-    blurb: 'Picks up yellow POLLEN only. Fast shooter. Pulls POLLEN out of FLOWERS.',
-    takesPollen: true, takesNectar: false, fireInterval: 0.25
+    blurb: 'Picks up yellow POLLEN only. Pulls POLLEN out of FLOWERS.',
+    takesPollen: true, takesNectar: false
   },
   nectar: {
     name: 'Nectar Bot', letter: 'N',
-    blurb: 'Picks up your own NECTAR only. Fast shooter. NECTAR weighs more in the HIVE.',
-    takesPollen: false, takesNectar: true, fireInterval: 0.25
+    blurb: 'Picks up your own NECTAR only. NECTAR weighs more in the HIVE.',
+    takesPollen: false, takesNectar: true
   },
   hybrid: {
     name: 'Hybrid Bot', letter: 'H',
-    blurb: 'Picks up both. Shoots at half the speed of the specialists.',
-    takesPollen: true, takesNectar: true, fireInterval: 0.5
+    blurb: 'Picks up both POLLEN and your own NECTAR.',
+    takesPollen: true, takesNectar: true
   }
 };
 const ARCHETYPE_ORDER = ['pollen', 'nectar', 'hybrid'];

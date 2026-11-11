@@ -525,7 +525,7 @@ function applyRobotActions(world, robot, cmd) {
   if (cmd.fire) {
     if (robot.fireCooldown > 0) return;
     fireRobot(world, robot);
-    robot.fireCooldown = ARCHETYPES[robot.archetype].fireInterval;
+    robot.fireCooldown = ROBOT.fireInterval;
     return;
   }
   /* Pulling is a separate action, and it needs the fire key up. Otherwise one press would
