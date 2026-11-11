@@ -68,8 +68,14 @@ function lastMinuteStarted(world) {
   return id === 'settle' || id === 'done';
 }
 
-function frameRect() {
-  return { x0: -HIVE.halfW, x1: HIVE.halfW, y0: -HIVE.halfD, y1: HIVE.halfD };
+const HIVE_BARS = hiveBars();
+
+/* Pushes a ball out of the HIVE's base bars and bounces it off whichever one it hit. */
+function bounceOffHiveBars(ball) {
+  for (const bar of HIVE_BARS) {
+    const n = pushOutOfRect(ball, ball.r, bar);
+    if (n) bounceBall(ball, n.x, n.y);
+  }
 }
 
 function pointInRect(x, y, rect) {
@@ -398,13 +404,13 @@ function separatePair(a, b, minDist) {
   b.y += ny * push;
 }
 
-/* Walls, the HIVE frame and FLOWERS are all solid for robots. The HIVE frame is treated as a
-   box, and each FLOWER as a circle, which matches how the robot is drawn. */
+/* Walls, the HIVE's two base bars and FLOWERS are solid for robots. The rest of the HIVE is
+   overhead, so a robot drives under it. Each FLOWER is a circle, matching how it is drawn. */
 function resolveRobotStatics(world, robot) {
   const e = aabbHalf(robot);
   robot.x = clampValue(robot.x, -FIELD.half + e, FIELD.half - e);
   robot.y = clampValue(robot.y, -FIELD.half + e, FIELD.half - e);
-  pushOutOfRect(robot, e, frameRect());
+  for (const bar of HIVE_BARS) pushOutOfRect(robot, e, bar);
   for (const flower of world.flowers) {
     pushOutOfCircle(robot, flower, FLOWER.r + ROBOT.half);
   }
@@ -686,8 +692,7 @@ function stepFloorBalls(world, h) {
     ball.x += ball.vx * h;
     ball.y += ball.vy * h;
     bounceOffFieldWalls(ball);
-    const frameNormal = pushOutOfRect(ball, ball.r, frameRect());
-    if (frameNormal) bounceBall(ball, frameNormal.x, frameNormal.y);
+    bounceOffHiveBars(ball);
     for (const flower of world.flowers) {
       const n = pushOutOfCircle(ball, flower, FLOWER.r + ball.r);
       if (n) bounceBall(ball, n.x, n.y);
@@ -708,9 +713,9 @@ function stepAirborneBalls(world, h) {
   }
 }
 
-/* An airborne ball ignores robots, balls and the HIVE frame. A shot comes down where it was
-   aimed. It drops into its target CELL if that CELL is up, and otherwise lands on the frame
-   and rolls off: a miss. Only the CELL it was aimed at can take it. */
+/* An airborne ball ignores robots, balls and the HIVE. A shot comes down where it was aimed.
+   It drops into its target CELL if that CELL is up, and otherwise falls through to the tiles
+   under the HIVE: a miss. Only the CELL it was aimed at can take it. */
 function stepAirborne(world, ball, h) {
   const air = ball.air;
   const travel = (air.speed || BALL.shotSpeed) * h;
@@ -764,8 +769,7 @@ function landBall(ball, sign) {
   ball.vx = sign * air.dx * BALL.landRoll;
   ball.vy = sign * air.dy * BALL.landRoll;
   bounceOffFieldWalls(ball);
-  const frameNormal = pushOutOfRect(ball, ball.r, frameRect());
-  if (frameNormal) bounceBall(ball, frameNormal.x, frameNormal.y);
+  bounceOffHiveBars(ball);
 }
 
 /* ---------- HIVE tipping ---------- */

@@ -325,8 +325,27 @@ test('a shot at a CELL that is down misses and stays on the field', () => {
   assert.strictEqual(world.hives.red.cells[0].length, 0, 'nothing went into the -x CELL');
   assert.strictEqual(world.hives.red.cells[1].length, 3, 'the up CELL still has only its 3 NECTAR');
   assert.strictEqual(world.hives.red.tips, 0);
-  const onFloor = world.balls.filter(b => b.kind === 'pollen' && b.air === null && Math.abs(b.y - 0.25) < 0.6 && b.x < -0.6 && b.x > -1.3);
-  assert.ok(onFloor.length >= 1, 'the missed POLLEN rolled off the frame onto the tiles');
+  const underHive = world.balls.filter(b => b.kind === 'pollen' && b.air === null && b.x > -0.6096 && b.x < 0 && b.y > 0 && b.y < 0.5);
+  assert.ok(underHive.length >= 1, 'the missed POLLEN fell through to the tiles under the HIVE');
+});
+
+test('robots drive under the HIVE: only its two base bars are solid', () => {
+  const world = setupWorld({ R1: 'pollen', R2: 'pollen', B1: 'pollen', B2: 'nectar' });
+  runUntilPhase(world, 'auto');
+  const bot = robotOf(world, 'B1');
+  bot.x = 0;
+  bot.y = -1.2;
+  bot.heading = Math.PI / 2;
+  runUntil(world, () => bot.y > 1.0, { B1: { drive: 1, turn: 0, fire: false } }, 600);
+  assert.ok(bot.y > 1.0, `drove from the blue side under the HIVE to the red side, reached y = ${bot.y}`);
+  assert.ok(Math.abs(bot.x) < 0.01, 'straight through, nothing pushed it sideways');
+
+  // Driving along x into the -x bar still stops it, with its edge on the bar's outer face.
+  bot.x = -1.4;
+  bot.y = 0;
+  bot.heading = 0;
+  runFor(world, 1.5, { B1: { drive: 1, turn: 0, fire: false } });
+  assert.ok(Math.abs(bot.x - (-0.635 - 0.2286)) < 0.01, `stopped at the -x bar, x = ${bot.x}`);
 });
 
 for (const { name, fn } of tests) {

@@ -18,6 +18,7 @@ const FX_SECS = { shot: 0.18, cell: 0.45, land: 0.3, spill: 0.9 };
 const RECOIL_SECS = 0.12;          // a robot kicks back this long after a shot
 const RECOIL_M = 0.03;             // and this far
 const TRAIL = [0.05, 0.1, 0.15];   // ghost balls this far behind a flying ball, metres
+const CANOPY_ALPHA = 0.72;         // the HIVE is overhead, so robots under it show through
 
 function makeLayout(view) {
   const worldW = 2 * (FIELD.half + ALLIANCE_STRIP);
@@ -217,11 +218,12 @@ function drawCell(ctx, L, world, a, end) {
 
   ctx.save();
   setFieldTransform(ctx, L);
+  ctx.globalAlpha = CANOPY_ALPHA;
   if (up) {
-    ctx.globalAlpha = 0.3;
+    ctx.globalAlpha = CANOPY_ALPHA * (0.3);
     ctx.fillStyle = COLORS[a];
     ctx.fillRect(r.x0, r.y0, w, h);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = CANOPY_ALPHA * (1);
     ctx.save();
     ctx.beginPath();
     ctx.rect(r.x0, r.y0, w, h);
@@ -244,10 +246,10 @@ function drawCell(ctx, L, world, a, end) {
     const frac = Math.min(1, load / HIVE.tipLoad);
     const mx = r.x0 + 0.025;
     const mw = 0.028;
-    ctx.globalAlpha = 0.12;
+    ctx.globalAlpha = CANOPY_ALPHA * (0.12);
     ctx.fillStyle = COLORS.ink;
     ctx.fillRect(mx, r.y0, mw, h);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = CANOPY_ALPHA * (1);
     ctx.fillStyle = COLORS.pollen;
     ctx.fillRect(mx, r.y1 - frac * h, mw, frac * h);
   } else {
@@ -279,12 +281,22 @@ function drawCell(ctx, L, world, a, end) {
   ctx.restore();
 }
 
-/* The HIVE frame, its two halves (blue top, red bottom), and each half's tip flash. The
+/* The HIVE's two base bars, the only part of it on the tiles. Drawn under the robots. */
+function drawHiveBars(ctx, L) {
+  ctx.save();
+  setFieldTransform(ctx, L);
+  ctx.fillStyle = COLORS.frame;
+  for (const bar of hiveBars()) ctx.fillRect(bar.x0, bar.y0, bar.x1 - bar.x0, bar.y1 - bar.y0);
+  ctx.restore();
+}
+
+/* The HIVE overhead: its two halves (blue top, red bottom), and each half's tip flash. The
    flash assumes tipT counts down from HIVE.tipTime to 0, so it fades out as the tip ends. */
 function drawHive(ctx, L, world) {
   const { halfW, halfD, cellInner, tipTime } = HIVE;
   ctx.save();
   setFieldTransform(ctx, L);
+  ctx.globalAlpha = CANOPY_ALPHA;
   roundRectPath(ctx, -halfW - 0.03, -halfD - 0.03, 2 * halfW + 0.06, 2 * halfD + 0.06, 0.04);
   ctx.fillStyle = '#1d2128';
   ctx.fill();
@@ -299,16 +311,17 @@ function drawHive(ctx, L, world) {
 
   ctx.save();
   setFieldTransform(ctx, L);
+  ctx.globalAlpha = CANOPY_ALPHA;
   ctx.fillStyle = COLORS.frame;
   ctx.fillRect(-halfW, -0.01, 2 * halfW, 0.02);             // the line between the two halves
-  ctx.globalAlpha = 0.5;
+  ctx.globalAlpha = CANOPY_ALPHA * (0.5);
   ctx.fillRect(-cellInner, -halfD, 2 * cellInner, halfD);   // the see-saw pivot, blue half
   ctx.fillRect(-cellInner, 0, 2 * cellInner, halfD);        // and red half
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = CANOPY_ALPHA * (1);
   for (const a of ['blue', 'red']) {
     const t = world.hives[a].tipT;
     if (!(t > 0)) continue;
-    ctx.globalAlpha = 0.65 * Math.min(1, t / tipTime);
+    ctx.globalAlpha = CANOPY_ALPHA * (0.65 * Math.min(1, t / tipTime));
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(-halfW, a === 'blue' ? -halfD : 0, 2 * halfW, halfD);
   }
@@ -373,14 +386,21 @@ function drawFlowers(ctx, L, world) {
   });
 }
 
-// Floor balls first, then the lobbed ones on top. Shadows go under every airborne ball.
-function drawBalls(ctx, L, world) {
-  const floor = world.balls.filter(b => !b.air);
+// Balls on the tiles, drawn under the robots and the HIVE canopy.
+function drawFloorBalls(ctx, L, world) {
+  ctx.save();
+  setFieldTransform(ctx, L);
+  world.balls.forEach(b => {
+    if (!b.air) drawBall(ctx, L, b.kind, b.color, b.x, b.y, b.r);
+  });
+  ctx.restore();
+}
+
+/* Airborne balls go over everything, the HIVE included, since they fly in above it. */
+function drawFlyingBalls(ctx, L, world) {
   const flying = world.balls.filter(b => b.air);
   ctx.save();
   setFieldTransform(ctx, L);
-  floor.forEach(b => drawBall(ctx, L, b.kind, b.color, b.x, b.y, b.r));
-
   ctx.globalAlpha = 0.3;
   ctx.fillStyle = '#000000';
   flying.forEach(b => {
@@ -647,11 +667,13 @@ function drawWorld(ctx, world, view) {
   drawAllianceAreas(ctx, L, world);
   drawField(ctx, L);
   drawZones(ctx, L);
-  drawHive(ctx, L, world);
+  drawHiveBars(ctx, L);
   drawFlowers(ctx, L, world);
-  drawBalls(ctx, L, world);
-  world.robots.forEach(robot => drawAim(ctx, L, robot, world));
+  drawFloorBalls(ctx, L, world);
   world.robots.forEach(robot => drawRobot(ctx, L, robot, world));
+  drawHive(ctx, L, world);
+  world.robots.forEach(robot => drawAim(ctx, L, robot, world));
+  drawFlyingBalls(ctx, L, world);
   drawFx(ctx, L, world);
   drawToasts(ctx, L, world);
   drawBanner(ctx, L, world);

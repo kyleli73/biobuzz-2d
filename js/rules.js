@@ -68,7 +68,10 @@ const BALL = {
 };
 
 /* HIVE structure, 9.6. The frame is 49.46 in by 38.95 in at the base, in the centre of the
-   field, and robots and balls cannot pass through it. It holds two HIVES side by side: blue
+   field. It is two triangles joined at the top, and the only parts that touch the tiles are
+   the two base bars, one under each triangle at the +x and -x ends. Everything else hangs
+   overhead (the CELLS sit 25.5 in up and more), so robots and balls drive straight under the
+   HIVE between the bars. G409 is written for exactly that. It holds two HIVES side by side: blue
    on the top half (y < 0), red on the bottom half. Each HIVE is a see-saw with a CELL at each
    end (end 0 at -x, end 1 at +x). One CELL faces up at a time.
    The manual's figures are 3D; this top-down layout is our reading of them. The blue +x end
@@ -77,6 +80,11 @@ const BALL = {
 const HIVE = {
   halfW: 0.628,          // frame half-width along x
   halfD: 0.495,          // frame half-depth along y
+  /* The two base bars. Same numbers as dsim's colliders.ts: inner face on the 24 in tile seam,
+     1 in thick, 19.4 in either side of the centre line (measured; Figure 9-8). */
+  barIn: 0.6096,
+  barOut: 0.635,
+  barHalfY: 0.4928,
   cellInner: 0.27,       // a CELL spans |x| from here to halfW
   /* How full a CELL must be before it tips. The manual does not say, but the Event Field Setup
      Guide (V1.0, section 12.3) does: every CELL is ballasted to tip at 8 POLLEN alone, or at 3
@@ -88,6 +96,15 @@ const HIVE = {
   startUp: { blue: 0, red: 1 },
   startNectar: 3         // 10.3.1 B.i: 3 NECTAR of its own colour in each upward CELL
 };
+
+/* The two base bars as rectangles, -x bar first. They are the only solid part of the HIVE. */
+function hiveBars() {
+  const { barIn, barOut, barHalfY } = HIVE;
+  return [
+    { x0: -barOut, x1: -barIn, y0: -barHalfY, y1: barHalfY },
+    { x0: barIn, x1: barOut, y0: -barHalfY, y1: barHalfY }
+  ];
+}
 
 /* The CELL rectangle for one alliance's HIVE end, in field coordinates. */
 function cellRect(alliance, end) {
