@@ -20,9 +20,9 @@ const FIELD = {
 const ROBOT = {
   size: 0.4572,          // 18 in square, the starting size limit
   half: 0.2286,
-  motorRpm: 312,
+  motorRpm: 500,
   wheelMm: 104,
-  maxSpeed: 312 / 60 * Math.PI * 0.104,   // 1.70 m/s at the wheel
+  maxSpeed: 500 / 60 * Math.PI * 0.104,   // 2.72 m/s at the wheel
   accel: 5.0,            // m/s^2
   maxTurn: 3.6,          // rad/s
   turnAccel: 18,         // rad/s^2
