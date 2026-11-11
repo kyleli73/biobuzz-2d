@@ -146,7 +146,32 @@ test('a POLLEN robot in front of its alliance CELL tips the HIVE after 3 POLLEN,
   assert.strictEqual(world.reserve.blue, 4);
   const dropped = world.balls.filter(b => b.kind === 'nectar' && b.color === 'blue' && ballInRect(b, ZONES.loading.blue));
   assert.strictEqual(dropped.length, 1);
-  assert.ok(world.events.some(e => e.text === 'BLUE HIVE TIPPED +20'));
+  assert.ok(world.events.some(e => e.text === 'BLUE HIVE TIPPED +20, 6 back in play'));
+});
+
+test('a tip recycles the CELL: its 6 elements fly out, land past the frame, and can be collected again', () => {
+  const world = setupWorld({ R1: 'hybrid', R2: 'nectar', B1: 'pollen', B2: 'nectar' });
+  runUntilPhase(world, 'auto');
+  const total = () => world.balls.length + world.robots.reduce((n, r) => n + r.held.length, 0)
+    + world.flowers.reduce((n, f) => n + f.stack.length, 0)
+    + ['red', 'blue'].reduce((n, a) => n + world.hives[a].cells[0].length + world.hives[a].cells[1].length, 0);
+  const before = total();
+  const shooter = robotOf(world, 'B1');
+  shooter.x = -1.45;
+  shooter.y = -0.25;
+  shooter.heading = 0;
+  runUntil(world, w => w.banked.blue.hive >= 20, { B1: { drive: 0, turn: 0, fire: true } }, 600);
+
+  const spilled = world.balls.filter(b => b.air && b.air.spill);
+  assert.strictEqual(spilled.length, 6, '3 starting NECTAR and 3 POLLEN fly out');
+  assert.ok(spilled.every(b => b.x < -0.628), 'out past the -x end of the frame');
+  assert.strictEqual(world.hives.blue.cells[0].length, 0);
+  assert.ok(world.fx.some(f => f.kind === 'spill' && f.alliance === 'blue' && f.count === 6));
+  assert.strictEqual(world.fx.filter(f => f.kind === 'cell').length, 3, 'one splash per POLLEN that went in');
+
+  runFor(world, 1, {});
+  assert.ok(spilled.every(b => b.air === null), 'all six are back on the tiles');
+  assert.strictEqual(total(), before + 1, 'nothing lost: the only new ball is the NECTAR the tip unlocked');
 });
 
 test('G410: a NECTAR robot at a FLOWER cannot drop NECTAR until the last minute, then it can and scores for it', () => {

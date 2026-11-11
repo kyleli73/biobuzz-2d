@@ -15,8 +15,11 @@ const WORLD_TUNING = {
   releaseGap: 0.4,        // seconds between last-minute NECTAR drops
   spawnTries: 8,          // attempts to find an empty spot for a dropped NECTAR
   spillGap: 0.02,         // how far past the frame a tipped ball is placed
-  spillSpeedMin: 0.3,     // outward m/s after a tip, from 0.3 ...
-  spillSpeedRange: 0.5,   // ... to 0.8
+  spillFlySpeed: 1.6,     // m/s a spilled ball flies out of a tipped CELL
+  spillRangeMin: 0.3,     // it lands 0.3 ...
+  spillRangeRange: 0.4,   // ... to 0.7 m past the frame
+  spillSpread: 0.7,       // radians either side of straight out
+  fxKeep: 1.0,            // seconds an effect stays readable for render.js
   frontMargin: 0.05,      // the front point sits this far beyond the robot's edge
   intakeBack: 0.02,       // intake window, in robot-local metres, behind the front edge
   intakeFront: 0.03,      // and this far beyond the ball's own radius
@@ -217,6 +220,7 @@ function createWorld(setup) {
     releaseT: { red: 0, blue: 0 },
     banked: { red: emptyBank(), blue: emptyBank() },
     events: [],
+    fx: [],
     final: null,
     nextId: 1
   };
@@ -252,6 +256,12 @@ function pushEvent(world, text, alliance) {
   world.events.push({ t: world.time, text, alliance });
   const extra = world.events.length - WORLD_TUNING.eventKeep;
   if (extra > 0) world.events.splice(0, extra);
+}
+
+/* Effects are the moments render.js animates: a shot leaving a robot, a ball dropping into a
+   CELL, a ball landing, a CELL spilling. They change nothing in the game. */
+function pushFx(world, kind, x, y, extra) {
+  world.fx.push({ kind, x, y, t: world.time, ...extra });
 }
 
 /* A refusal is repeated every fire interval while the key is held. The cooldown stops the
@@ -296,6 +306,7 @@ function stepWorld(world, dt, inputs) {
      run in slow motion on a slow computer. main.js caps dt for a tab waking up. */
   const steps = Math.max(1, Math.ceil(dt / WORLD_TUNING.maxStep));
   for (let i = 0; i < steps; i++) stepSubstep(world, dt / steps, inputs || {});
+  world.fx = world.fx.filter(f => world.time - f.t < WORLD_TUNING.fxKeep);
 }
 
 function stepSubstep(world, h, inputs) {
@@ -569,6 +580,7 @@ function launchHeld(world, robot) {
     owner: robot.slot
   };
   world.balls.push(ball);
+  pushFx(world, 'shot', front.x, front.y, { slot: robot.slot, alliance: robot.alliance, dx: ball.air.dx, dy: ball.air.dy });
 }
 
 /* The hint is the short line the HUD shows under each robot. It tells the player what the
@@ -664,19 +676,22 @@ function stepAirborneBalls(world, h) {
    count. */
 function stepAirborne(world, ball, h) {
   const air = ball.air;
-  const travel = BALL.shotSpeed * h;
+  const travel = (air.speed || BALL.shotSpeed) * h;
   ball.x += air.dx * travel;
   ball.y += air.dy * travel;
   air.flown += travel;
 
-  if (air.flown >= BALL.shotArmDist) {
+  if (!air.spill && air.flown >= BALL.shotArmDist) {
     const alliance = cellUnderBall(world, ball);
     if (alliance) {
       arriveAtCell(world, ball, alliance);
       return;
     }
   }
-  if (air.flown >= air.range || leavesField(ball)) landBall(ball, 1);
+  if (air.flown >= air.range || leavesField(ball)) {
+    landBall(ball, 1);
+    pushFx(world, 'land', ball.x, ball.y, { r: ball.r });
+  }
 }
 
 function cellUnderBall(world, ball) {
@@ -691,8 +706,10 @@ function arriveAtCell(world, ball, alliance) {
   /* A HIVE that is mid-tip is not taking balls. The shot bounces back out instead. */
   if (world.hives[alliance].tipT > 0) {
     landBall(ball, -1);
+    pushFx(world, 'land', ball.x, ball.y, { r: ball.r });
     return;
   }
+  pushFx(world, 'cell', ball.x, ball.y, { color: ball.color });
   removeBall(world, ball);
   storeInCell(world, ball, alliance);
 }
@@ -740,32 +757,46 @@ function checkTip(world, alliance) {
 
 function tipHive(world, alliance) {
   const hive = world.hives[alliance];
-  spillCell(world, alliance, hive.up);
+  const recycled = spillCell(world, alliance, hive.up);
   hive.up = 1 - hive.up;
   hive.tips += 1;
   hive.tipT = HIVE.tipTime;
   world.banked[alliance].hive += POINTS.tip;
-  pushEvent(world, `${alliance.toUpperCase()} HIVE TIPPED +${POINTS.tip}`, alliance);
+  pushEvent(world, `${alliance.toUpperCase()} HIVE TIPPED +${POINTS.tip}, ${recycled} back in play`, alliance);
   releaseOneNectar(world, alliance);
 }
 
-/* The balls in the tipped CELL fall out past the frame at that end. Each one gets a small
-   outward push, so it rolls away from the HIVE rather than sitting on the frame. */
+/* Tips recycle. Everything in the tipped CELL pours out past the frame at that end and comes
+   back into play, so the same POLLEN and NECTAR can be collected and LAUNCHED again. Each
+   ball flies out in a short arc before it touches the tiles. Until then no robot can take it,
+   which is G409: spilled elements must hit the floor before anyone collects them. A spilled
+   ball cannot drop into a CELL either. Returns how many balls came out. */
 function spillCell(world, alliance, end) {
   const hive = world.hives[alliance];
   const balls = hive.cells[end];
   hive.cells[end] = [];
   const rect = cellRect(alliance, end);
   const sign = end === 0 ? -1 : 1;
+  const T = WORLD_TUNING;
   for (const ball of balls) {
-    ball.x = sign * (HIVE.halfW + ball.r + WORLD_TUNING.spillGap);
+    ball.x = sign * (HIVE.halfW + ball.r + T.spillGap);
     ball.y = rect.y0 + ball.r + Math.random() * (rect.y1 - rect.y0 - 2 * ball.r);
-    const speed = WORLD_TUNING.spillSpeedMin + Math.random() * WORLD_TUNING.spillSpeedRange;
-    ball.vx = sign * speed;
+    const angle = (Math.random() * 2 - 1) * T.spillSpread;
+    ball.vx = 0;
     ball.vy = 0;
-    ball.air = null;
+    ball.air = {
+      dx: sign * Math.cos(angle),
+      dy: Math.sin(angle),
+      flown: 0,
+      range: T.spillRangeMin + Math.random() * T.spillRangeRange,
+      owner: null,
+      spill: true,
+      speed: T.spillFlySpeed
+    };
     world.balls.push(ball);
   }
+  pushFx(world, 'spill', sign * HIVE.halfW, (rect.y0 + rect.y1) / 2, { alliance, count: balls.length, sign });
+  return balls.length;
 }
 
 /* ---------- NECTAR entry ---------- */

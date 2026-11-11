@@ -12,6 +12,12 @@ const TOAST_MAX = 4;               // at most this many toasts at once
 const TELEOP_BANNER_SECS = 1.2;    // how long the "TELEOP!" banner shows
 const FONT = '"Fredoka", ui-rounded, "SF Pro Rounded", system-ui, sans-serif';
 const TAU = Math.PI * 2;
+/* How long each effect plays, in seconds. world.fx keeps an effect for a second, so these
+   must stay under that. */
+const FX_SECS = { shot: 0.18, cell: 0.45, land: 0.3, spill: 0.9 };
+const RECOIL_SECS = 0.12;          // a robot kicks back this long after a shot
+const RECOIL_M = 0.03;             // and this far
+const TRAIL = [0.05, 0.1, 0.15];   // ghost balls this far behind a flying ball, metres
 
 function makeLayout(view) {
   const worldW = 2 * (FIELD.half + ALLIANCE_STRIP);
@@ -385,6 +391,14 @@ function drawBalls(ctx, L, world) {
   ctx.globalAlpha = 1;
 
   flying.forEach(b => {
+    TRAIL.forEach((back, k) => {
+      const flown = b.air.flown - back;
+      if (flown <= 0) return;
+      const h = lobHeight({ flown, range: b.air.range });
+      ctx.globalAlpha = 0.35 - k * 0.1;
+      drawBall(ctx, L, b.kind, b.color, b.x - b.air.dx * back, b.y - b.air.dy * back - LOB_HEIGHT * h, b.r * (0.9 - k * 0.15));
+    });
+    ctx.globalAlpha = 1;
     const h = lobHeight(b.air);
     // Screen up is minus y, so lifting the ball means subtracting from y.
     drawBall(ctx, L, b.kind, b.color, b.x, b.y - LOB_HEIGHT * h, b.r * (1 + 0.3 * h));
@@ -422,12 +436,13 @@ function drawAim(ctx, L, robot) {
    up to four held balls on the back half, the slot name in the middle, and the archetype
    letter in a badge at the front corner. The robot is drawn in its own rotated frame, so
    the front is always +x in local space. */
-function drawRobot(ctx, L, robot) {
+function drawRobot(ctx, L, robot, world) {
   const half = ROBOT.half;
   const size = ROBOT.size;
+  const kick = recoilOf(world, robot);
   ctx.save();
   setFieldTransform(ctx, L);
-  ctx.translate(robot.x, robot.y);
+  ctx.translate(robot.x - Math.cos(robot.heading) * kick, robot.y - Math.sin(robot.heading) * kick);
   ctx.rotate(robot.heading);
   roundRectPath(ctx, -half, -half, size, size, 0.04);
   ctx.fillStyle = COLORS[robot.alliance];
@@ -463,6 +478,99 @@ function drawRobot(ctx, L, robot) {
   ctx.stroke();
   ctx.restore();
   drawText(ctx, L, ARCHETYPES[robot.archetype].letter, bc.x, bc.y, { size: 11 });
+}
+
+/* How far back a robot is pushed by its latest shot: RECOIL_M straight after firing, easing
+   to 0 over RECOIL_SECS. */
+function recoilOf(world, robot) {
+  let kick = 0;
+  for (const f of world.fx) {
+    if (f.kind !== 'shot' || f.slot !== robot.slot) continue;
+    const t = (world.time - f.t) / RECOIL_SECS;
+    if (t >= 0 && t < 1) kick = Math.max(kick, RECOIL_M * (1 - t) * (1 - t));
+  }
+  return kick;
+}
+
+function fxColor(f) {
+  if (f.kind === 'cell') return f.color === 'yellow' ? COLORS.pollen : COLORS[f.color];
+  if (f.alliance) return COLORS[f.alliance];
+  return '#c9ced6';
+}
+
+/* The short animations world.fx asks for. Each one is a function of its age only, so a
+   paused game freezes them mid-play rather than skipping them. */
+function drawFx(ctx, L, world) {
+  ctx.save();
+  setFieldTransform(ctx, L);
+  for (const f of world.fx) {
+    const dur = FX_SECS[f.kind];
+    const t = (world.time - f.t) / dur;
+    if (!(t >= 0 && t < 1)) continue;
+    const fade = 1 - t;
+    const color = fxColor(f);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+
+    if (f.kind === 'shot') {
+      // A muzzle flash: a bright core and three sparks fanning forward.
+      ctx.globalAlpha = fade;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 0.02 + 0.04 * t, 0, TAU);
+      ctx.fillStyle = '#fff6d0';
+      ctx.fill();
+      ctx.lineWidth = pxToM(L, 2.5);
+      const a0 = Math.atan2(f.dy, f.dx);
+      for (const da of [-0.45, 0, 0.45]) {
+        const a = a0 + da;
+        const r0 = 0.03 + 0.05 * t;
+        const r1 = r0 + 0.06 * fade;
+        ctx.beginPath();
+        ctx.moveTo(f.x + Math.cos(a) * r0, f.y + Math.sin(a) * r0);
+        ctx.lineTo(f.x + Math.cos(a) * r1, f.y + Math.sin(a) * r1);
+        ctx.stroke();
+      }
+    } else if (f.kind === 'cell') {
+      // A splash where the ball drops into the CELL: a ring and six sparkles.
+      ctx.globalAlpha = fade;
+      ctx.lineWidth = pxToM(L, 3 * fade + 1);
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 0.03 + 0.13 * t, 0, TAU);
+      ctx.stroke();
+      for (let k = 0; k < 6; k++) {
+        const a = k * TAU / 6 + 0.3;
+        const r = 0.05 + 0.12 * t;
+        ctx.beginPath();
+        ctx.arc(f.x + Math.cos(a) * r, f.y + Math.sin(a) * r, 0.012 * fade, 0, TAU);
+        ctx.fill();
+      }
+    } else if (f.kind === 'land') {
+      // A dust puff where a ball touches down.
+      ctx.globalAlpha = 0.5 * fade;
+      ctx.lineWidth = pxToM(L, 1.5);
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, (f.r || 0.04) * (1 + 2 * t), 0, TAU);
+      ctx.stroke();
+    } else if (f.kind === 'spill') {
+      // The tipped CELL pours out: a burst fanning outward from the frame end.
+      ctx.globalAlpha = 0.7 * fade;
+      ctx.lineWidth = pxToM(L, 4 * fade + 1);
+      const a0 = f.sign > 0 ? 0 : Math.PI;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 0.05 + 0.4 * t, a0 - 1.1, a0 + 1.1);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  // A "RECYCLED" label rises from each spill so players see the elements are back in play.
+  for (const f of world.fx) {
+    if (f.kind !== 'spill' || !(f.count > 0)) continue;
+    const t = (world.time - f.t) / FX_SECS.spill;
+    if (!(t >= 0 && t < 1)) continue;
+    const p = fieldToScreen(L, f.x + f.sign * 0.12, f.y - 0.32);
+    drawText(ctx, L, `RECYCLED x${f.count}`, p.x, p.y - 30 * t, { size: 13, color: COLORS[f.alliance], shadow: true, alpha: 1 - t * t });
+  }
 }
 
 // Event toasts: the newest few recent events, stacked along the bottom edge of the field.
@@ -513,7 +621,8 @@ function drawWorld(ctx, world, view) {
   drawFlowers(ctx, L, world);
   drawBalls(ctx, L, world);
   world.robots.forEach(robot => drawAim(ctx, L, robot));
-  world.robots.forEach(robot => drawRobot(ctx, L, robot));
+  world.robots.forEach(robot => drawRobot(ctx, L, robot, world));
+  drawFx(ctx, L, world);
   drawToasts(ctx, L, world);
   drawBanner(ctx, L, world);
 }

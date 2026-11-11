@@ -229,13 +229,14 @@ const COLORS = {
                 left (true once off the wall in AUTO), hint (short text for the HUD),
                 refuseCooldown }],
      balls:  [{ id, kind: 'pollen'|'nectar', color: 'yellow'|'red'|'blue', r, x, y, vx, vy,
-                air: null | { dx, dy, flown, range, owner } }]      floor and airborne only
+                air: null | { dx, dy, flown, range, owner, spill?, speed? } }]  floor and airborne
      hives:  { red: { up: 0|1, cells: [[ball], [ball]], tipT, tips },  blue: same }
      flowers: [{ ...FLOWERS[i], stack: [ball] }]                    bottom first
      reserve: { red, blue }, released: { red: bool, blue: bool }     NECTAR still off field
      releaseT: { red, blue }                                        timers for last-minute drops
      banked: { red: { leave, autoPark, hive }, blue: same }          points already locked in
      events: [{ t, text, alliance|null }]                           newest last, for toasts
+     fx: [{ kind: 'shot'|'cell'|'land'|'spill', x, y, t, ... }]       the last second of effects
      final: null | score                                            frozen when phase hits done
    }
    score = { red: { total, leave, autoPark, hive, cell, flower, garden, park }, blue: same } */
