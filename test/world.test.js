@@ -122,7 +122,7 @@ test('a robot driven forward in AUTO moves along +x until the HIVE frame stops i
   runFor(world, 1, { R1: { drive: 1, turn: 0, fire: false } });
   assert.ok(driver.x - startX > 0.5, `moved only ${driver.x - startX} m`);
   assert.ok(Math.abs(driver.y - startY) < 0.01, 'drove straight along x');
-  assert.ok(driver.x < -0.8, 'stopped by the red HIVE frame, not the wall');
+  assert.ok(driver.x > -1.0, 'nothing in its way: it drives in under the HIVE');
 
   runUntilPhase(world, 'transition');
   assert.strictEqual(world.banked.red.leave, 3, 'only R1 left its wall');
@@ -329,23 +329,23 @@ test('a shot at a CELL that is down misses and stays on the field', () => {
   assert.ok(underHive.length >= 1, 'the missed POLLEN fell through to the tiles under the HIVE');
 });
 
-test('robots drive under the HIVE: only its two base bars are solid', () => {
+test('robots drive under the HIVE from either end: only its two base bars, top and bottom, are solid', () => {
   const world = setupWorld({ R1: 'pollen', R2: 'pollen', B1: 'pollen', B2: 'nectar' });
   runUntilPhase(world, 'auto');
   const bot = robotOf(world, 'B1');
+  bot.x = -0.95;   // clear of R1, which starts on the red wall at y = 0.05
+  bot.y = 0;
+  bot.heading = 0;
+  runUntil(world, () => bot.x > 1.0, { B1: { drive: 1, turn: 0, fire: false } }, 600);
+  assert.ok(bot.x > 1.0, `drove in at the -x end, under the HIVE and out at the +x end, reached x = ${bot.x}`);
+  assert.ok(Math.abs(bot.y) < 0.01, `straight through, nothing pushed it sideways, y = ${bot.y}`);
+
+  // Driving along y into the blue (top) bar stops it, with its edge on the bar's outer face.
   bot.x = 0;
   bot.y = -1.2;
   bot.heading = Math.PI / 2;
-  runUntil(world, () => bot.y > 1.0, { B1: { drive: 1, turn: 0, fire: false } }, 600);
-  assert.ok(bot.y > 1.0, `drove from the blue side under the HIVE to the red side, reached y = ${bot.y}`);
-  assert.ok(Math.abs(bot.x) < 0.01, 'straight through, nothing pushed it sideways');
-
-  // Driving along x into the -x bar still stops it, with its edge on the bar's outer face.
-  bot.x = -1.4;
-  bot.y = 0;
-  bot.heading = 0;
   runFor(world, 1.5, { B1: { drive: 1, turn: 0, fire: false } });
-  assert.ok(Math.abs(bot.x - (-0.635 - 0.2286)) < 0.01, `stopped at the -x bar, x = ${bot.x}`);
+  assert.ok(Math.abs(bot.y - (-0.495 - 0.2286)) < 0.01, `stopped at the blue bar, y = ${bot.y}`);
 });
 
 for (const { name, fn } of tests) {
