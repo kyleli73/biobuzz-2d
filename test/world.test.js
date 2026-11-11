@@ -174,6 +174,21 @@ test('a tip recycles the CELL: its 6 elements fly out, land past the frame, and 
   assert.strictEqual(total(), before + 1, 'nothing lost: the only new ball is the NECTAR the tip unlocked');
 });
 
+test('a POLLEN robot whose intake touches a FLOWER pulls its POLLEN out at once, as many as it has room for', () => {
+  const world = setupWorld({ R1: 'pollen', R2: 'pollen', B1: 'pollen', B2: 'nectar' });
+  runUntilPhase(world, 'auto');
+  const bot = robotOf(world, 'B1');
+  bot.held.length = 1;          // room for 3 more
+  bot.x = 1.408;                // same spot as the G410 test: front point at the blue wall FLOWER
+  bot.y = -0.594;
+  bot.heading = 0;
+  const flower = world.flowers[3];
+  stepWorld(world, STEP, {});
+  assert.strictEqual(bot.atFlower, 3);
+  assert.strictEqual(bot.held.length, 4, 'full after one step');
+  assert.strictEqual(flower.stack.length, 1, '3 of the 4 starting POLLEN came out, 1 is left');
+});
+
 test('G410: a NECTAR robot at a FLOWER cannot drop NECTAR until the last minute, then it can and scores for it', () => {
   const world = setupWorld({ R1: 'pollen', R2: 'pollen', B1: 'pollen', B2: 'nectar' });
   runUntilPhase(world, 'auto');

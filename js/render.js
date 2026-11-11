@@ -281,12 +281,18 @@ function drawCell(ctx, L, world, a, end) {
   ctx.restore();
 }
 
-/* The HIVE's two base bars, the only part of it on the tiles. Drawn under the robots. */
+/* The HIVE's two walls: its base bars along the top and bottom edges, the only part of it that
+   blocks anything. Drawn over the canopy, at least 6 px thick, so they read as the walls they
+   are. The bars are 1 in thick, so each is drawn growing inward from the frame's outer edge. */
 function drawHiveBars(ctx, L) {
   ctx.save();
   setFieldTransform(ctx, L);
-  ctx.fillStyle = COLORS.frame;
-  for (const bar of hiveBars()) ctx.fillRect(bar.x0, bar.y0, bar.x1 - bar.x0, bar.y1 - bar.y0);
+  ctx.fillStyle = '#c3c9d1';
+  for (const bar of hiveBars()) {
+    const h = Math.max(bar.y1 - bar.y0, pxToM(L, 6));
+    const y = bar.y0 < 0 ? bar.y0 : bar.y1 - h;
+    ctx.fillRect(bar.x0, y, bar.x1 - bar.x0, h);
+  }
   ctx.restore();
 }
 
@@ -297,12 +303,9 @@ function drawHive(ctx, L, world) {
   ctx.save();
   setFieldTransform(ctx, L);
   ctx.globalAlpha = CANOPY_ALPHA;
-  roundRectPath(ctx, -halfW - 0.03, -halfD - 0.03, 2 * halfW + 0.06, 2 * halfD + 0.06, 0.04);
+  // No outline: the two ends are open, and drawHiveBars draws the two sides that are walls.
   ctx.fillStyle = '#1d2128';
-  ctx.fill();
-  ctx.lineWidth = 0.025;
-  ctx.strokeStyle = COLORS.frame;
-  ctx.stroke();
+  ctx.fillRect(-halfW, -halfD, 2 * halfW, 2 * halfD);
   ctx.restore();
 
   for (const a of ['blue', 'red']) {
@@ -667,11 +670,11 @@ function drawWorld(ctx, world, view) {
   drawAllianceAreas(ctx, L, world);
   drawField(ctx, L);
   drawZones(ctx, L);
-  drawHiveBars(ctx, L);
   drawFlowers(ctx, L, world);
   drawFloorBalls(ctx, L, world);
   world.robots.forEach(robot => drawRobot(ctx, L, robot, world));
   drawHive(ctx, L, world);
+  drawHiveBars(ctx, L);
   world.robots.forEach(robot => drawAim(ctx, L, robot, world));
   drawFlyingBalls(ctx, L, world);
   drawFx(ctx, L, world);

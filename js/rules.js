@@ -125,8 +125,8 @@ const FLOWER = {
   r: 0.075,              // drawn and collision radius
   startPollen: 4,        // 10.3.1 A.i
   reach: 0.16,           // a robot's front must be this close to the centre to use it
-  pullCooldown: 0.5,     // seconds between pulling POLLEN out of the bottom
-  pullAfterDrop: 1.5,    // no pulling for this long after dropping something in
+  pullAfterDrop: 1.5,    // no pulling for this long after dropping something in, so a drop
+                         // is not pulled straight back out
   /* Heights inside the tube, in inches above the tiles, from section 9.7. POLLEN rests on the
      lower ring (0.4 in tall). NECTAR is too wide for the middle ring's hole, so it sits on the
      middle ring, which is the top of the 3.55 in Retrieval Opening. The manual does not print the
@@ -242,7 +242,7 @@ const COLORS = {
      teleopLeft (seconds left in TELEOP, 120 until TELEOP starts),
      robots: [{ slot, alliance, archetype, x, y, heading, v (forward m/s), omega,
                 aim: { end, x, y, angle, dist, outside, ok } (see aimFor in world.js),
-                held: [ball], fireCooldown, pullCooldown, sinceDrop, atFlower (index|-1),
+                held: [ball], fireCooldown, sinceDrop, atFlower (index|-1),
                 left (true once off the wall in AUTO), hint (short text for the HUD),
                 refuseCooldown }],
      balls:  [{ id, kind: 'pollen'|'nectar', color: 'yellow'|'red'|'blue', r, x, y, vx, vy,

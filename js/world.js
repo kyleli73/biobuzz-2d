@@ -163,7 +163,6 @@ function makeRobot(world, entry) {
     omega: 0,
     held: [],
     fireCooldown: 0,
-    pullCooldown: 0,
     sinceDrop: Infinity,     // Infinity means "nothing dropped yet", so pulling is allowed
     refuseCooldown: 0,
     atFlower: -1,
@@ -369,7 +368,6 @@ function driveRobot(robot, cmd, h) {
 
 function tickRobotTimers(robot, h) {
   robot.fireCooldown -= h;
-  robot.pullCooldown -= h;
   robot.sinceDrop += h;
   robot.refuseCooldown -= h;
 }
@@ -562,17 +560,17 @@ function dropOnFlower(world, robot) {
   robot.sinceDrop = 0;
 }
 
-/* Pulls the bottom POLLEN out of a FLOWER. NECTAR is never pulled from the bottom (G418), so
-   a bottom NECTAR simply blocks the pull. */
+/* Pulls POLLEN out of the bottom of a FLOWER the moment the intake touches it, as many as the
+   robot has room for. NECTAR is never pulled from the bottom (G418), so a bottom NECTAR stops
+   the pull. */
 function pullFromFlower(world, robot) {
   if (robot.atFlower < 0) return;
   if (!ARCHETYPES[robot.archetype].takesPollen) return;
-  if (robot.held.length >= ROBOT.maxHeld) return;
-  if (robot.sinceDrop <= FLOWER.pullAfterDrop || robot.pullCooldown > 0) return;
+  if (robot.sinceDrop <= FLOWER.pullAfterDrop) return;
   const stack = world.flowers[robot.atFlower].stack;
-  if (stack.length === 0 || stack[0].kind !== 'pollen') return;
-  robot.held.push(stack.shift());
-  robot.pullCooldown = FLOWER.pullCooldown;
+  while (robot.held.length < ROBOT.maxHeld && stack.length > 0 && stack[0].kind === 'pollen') {
+    robot.held.push(stack.shift());
+  }
 }
 
 /* Auto-aim, the way dsim does it: every robot has a turret that always points at the nearer
